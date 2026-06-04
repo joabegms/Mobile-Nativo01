@@ -2,45 +2,37 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../viewmodels/transacao_viewmodel.dart';
-import '../models/transacao.dart';
+import '../utils/chart_data.dart';
+import '../utils/formatters.dart';
 
 class GraficosView extends StatefulWidget {
   @override
-  State<GraficosView> createState() => _GraficosViewState();
+  _GraficosViewState createState() => _GraficosViewState();
 }
 
 class _GraficosViewState extends State<GraficosView> {
-  @override
-  void initState() {
-    super.initState();
-    Future.microtask(() {
-      context.read<TransacaoViewModel>().carregarTransacoes();
-    });
-  }
+  int _tipoGrafico = 0; // 0: Pizza, 1: Barras, 2: Linha
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('📊 Estatísticas e Gráficos'),
+        title: const Text('Gráficos'),
+        backgroundColor: Colors.blue[700],
         elevation: 0,
       ),
       body: Consumer<TransacaoViewModel>(
-        builder: (context, viewModel, child) {
-          if (viewModel.transacoes.isEmpty) {
+        builder: (context, transacaoVM, _) {
+          if (transacaoVM.transacoes.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.show_chart, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('Nenhuma transação para exibir gráficos'),
-                  SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: Text('Voltar'),
+                  Icon(Icons.insert_chart, size: 48, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Nenhuma transação para exibir gráficos',
+                    style: TextStyle(color: Colors.grey[600]),
                   ),
                 ],
               ),
@@ -48,48 +40,53 @@ class _GraficosViewState extends State<GraficosView> {
           }
 
           return SingleChildScrollView(
-            padding: EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Resumo de Gastos
-                _buildResumoCard(viewModel),
-                SizedBox(height: 24),
-
-                // Gráfico de Pizza - Distribuição por Categoria
-                Text(
-                  'Distribuição por Categoria',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                // Seletor de tipo de gráfico
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        FilterChip(
+                          label: const Text('Pizza'),
+                          selected: _tipoGrafico == 0,
+                          onSelected: (selected) {
+                            setState(() => _tipoGrafico = 0);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          label: const Text('Barras'),
+                          selected: _tipoGrafico == 1,
+                          onSelected: (selected) {
+                            setState(() => _tipoGrafico = 1);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          label: const Text('Linha'),
+                          selected: _tipoGrafico == 2,
+                          onSelected: (selected) {
+                            setState(() => _tipoGrafico = 2);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                SizedBox(height: 16),
-                _buildPieChart(viewModel),
-                SizedBox(height: 24),
-
-                // Gráfico de Barras - Receitas vs Despesas
-                Text(
-                  'Receitas vs Despesas',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                const Divider(),
+                // Gráfico
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: _construirGrafico(transacaoVM, _tipoGrafico),
                 ),
-                SizedBox(height: 16),
-                _buildBarChart(viewModel),
-                SizedBox(height: 24),
-
-                // Gráfico de Linha - Progresso ao longo do tempo
-                Text(
-                  'Progresso do Saldo',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                // Legenda e informações
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: _construirLegenda(transacaoVM),
                 ),
-                SizedBox(height: 16),
-                _buildLineChart(viewModel),
               ],
             ),
           );
@@ -98,250 +95,115 @@ class _GraficosViewState extends State<GraficosView> {
     );
   }
 
-  Widget _buildResumoCard(TransacaoViewModel viewModel) {
-    final receitas = viewModel.transacoes
-        .where((t) => t.tipo == 'Receita')
-        .fold<double>(0, (sum, t) => sum + t.valor);
-    final despesas = viewModel.transacoes
-        .where((t) => t.tipo == 'Despesa')
-        .fold<double>(0, (sum, t) => sum + t.valor);
-    final saldo = receitas - despesas;
-
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blue[400]!, Colors.blue[600]!],
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Resumo Financeiro',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+  Widget _construirGrafico(TransacaoViewModel transacaoVM, int tipo) {
+    switch (tipo) {
+      case 0:
+        // Gráfico de Pizza
+        return SizedBox(
+          height: 300,
+          child: PieChart(
+            ChartData.gerarGraficoPizza(transacaoVM.transacoes),
+            swapAnimationDuration: const Duration(milliseconds: 750),
           ),
-          SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildResumoItem('Receitas', receitas, Colors.green),
-              _buildResumoItem('Despesas', despesas, Colors.red),
-              _buildResumoItem('Saldo', saldo, Colors.white),
-            ],
+        );
+      case 1:
+        // Gráfico de Barras
+        return SizedBox(
+          height: 300,
+          child: BarChart(
+            ChartData.gerarGraficoBarras(transacaoVM.transacoes),
           ),
-        ],
-      ),
-    );
+        );
+      case 2:
+        // Gráfico de Linha
+        return SizedBox(
+          height: 300,
+          child: LineChart(
+            ChartData.gerarGraficoLinha(transacaoVM.transacoes),
+          ),
+        );
+      default:
+        return const SizedBox();
+    }
   }
 
-  Widget _buildResumoItem(String label, double valor, Color cor) {
+  Widget _construirLegenda(TransacaoViewModel transacaoVM) {
+    final gastosPorCategoria = <String, double>{};
+
+    for (var t in transacaoVM.transacoes) {
+      if (t.tipo == 'despesa' && t.categoria != null) {
+        gastosPorCategoria[t.categoria!] =
+            (gastosPorCategoria[t.categoria!] ?? 0) + t.valor;
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 12,
+        const Text(
+          'Resumo',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.green[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.green[300]!),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total de Receitas'),
+              Text(
+                Formatters.formatCurrency(transacaoVM.totalReceitas),
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[700]),
+              ),
+            ],
           ),
         ),
-        SizedBox(height: 4),
-        Text(
-          'R\$ ${valor.toStringAsFixed(2)}',
-          style: TextStyle(
-            color: cor,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.red[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.red[300]!),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total de Despesas'),
+              Text(
+                Formatters.formatCurrency(transacaoVM.totalDespesas),
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[700]),
+              ),
+            ],
           ),
         ),
+        const SizedBox(height: 16),
+        const Text(
+          'Despesas por Categoria',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        ...gastosPorCategoria.entries.map((entry) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(entry.key),
+                Text(
+                  Formatters.formatCurrency(entry.value),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
       ],
-    );
-  }
-
-  Widget _buildPieChart(TransacaoViewModel viewModel) {
-    final categoriaMap = <String, double>{};
-
-    for (var transacao in viewModel.transacoes) {
-      if (transacao.tipo == 'Despesa') {
-        categoriaMap.update(
-          transacao.categoria,
-          (value) => value + transacao.valor,
-          ifAbsent: () => transacao.valor,
-        );
-      }
-    }
-
-    if (categoriaMap.isEmpty) {
-      return Center(
-        child: Text('Nenhuma despesa para exibir'),
-      );
-    }
-
-    final cores = [
-      Colors.red[400]!,
-      Colors.orange[400]!,
-      Colors.yellow[400]!,
-      Colors.green[400]!,
-      Colors.blue[400]!,
-      Colors.purple[400]!,
-    ];
-
-    return Container(
-      height: 300,
-      padding: EdgeInsets.symmetric(vertical: 16),
-      child: PieChart(
-        PieChartData(
-          sections: List.generate(
-            categoriaMap.entries.length,
-            (index) {
-              final entry = categoriaMap.entries.elementAt(index);
-              return PieChartSectionData(
-                color: cores[index % cores.length],
-                value: entry.value,
-                title: entry.key,
-                radius: 100,
-                titleStyle: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              );
-            },
-          ),
-          centerSpaceRadius: 40,
-          sectionsSpace: 0,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBarChart(TransacaoViewModel viewModel) {
-    final receitas = viewModel.transacoes
-        .where((t) => t.tipo == 'Receita')
-        .fold<double>(0, (sum, t) => sum + t.valor);
-    final despesas = viewModel.transacoes
-        .where((t) => t.tipo == 'Despesa')
-        .fold<double>(0, (sum, t) => sum + t.valor);
-
-    final maxY = [receitas, despesas].reduce((a, b) => a > b ? a : b);
-
-    return Container(
-      height: 300,
-      padding: EdgeInsets.symmetric(vertical: 16),
-      child: BarChart(
-        BarChartData(
-          barGroups: [
-            BarChartGroupData(
-              x: 0,
-              barRods: [
-                BarChartRodData(
-                  toY: receitas,
-                  color: Colors.green[400],
-                  width: 40,
-                ),
-              ],
-            ),
-            BarChartGroupData(
-              x: 1,
-              barRods: [
-                BarChartRodData(
-                  toY: despesas,
-                  color: Colors.red[400],
-                  width: 40,
-                ),
-              ],
-            ),
-          ],
-          titlesData: FlTitlesData(
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (value, meta) {
-                  if (value == 0) return Text('Receitas');
-                  if (value == 1) return Text('Despesas');
-                  return Text('');
-                },
-              ),
-            ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (value, meta) {
-                  return Text('R\$ ${value.toInt()}');
-                },
-              ),
-            ),
-          ),
-          maxY: maxY * 1.1,
-          borderData: FlBorderData(show: false),
-          gridData: FlGridData(show: true),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLineChart(TransacaoViewModel viewModel) {
-    // Agrupar transações por data e calcular saldo acumulado
-    final transacoesPorData = <String, double>{};
-    double saldoAcumulado = 0;
-
-    final transacoesOrdenadas = List<Transacao>.from(viewModel.transacoes)
-      ..sort((a, b) => a.data.compareTo(b.data));
-
-    for (var transacao in transacoesOrdenadas) {
-      if (transacao.tipo == 'Receita') {
-        saldoAcumulado += transacao.valor;
-      } else {
-        saldoAcumulado -= transacao.valor;
-      }
-      transacoesPorData[transacao.data] = saldoAcumulado;
-    }
-
-    if (transacoesPorData.isEmpty) {
-      return Center(child: Text('Sem dados'));
-    }
-
-    final spots = List.generate(
-      transacoesPorData.length,
-      (index) => FlSpot(
-        index.toDouble(),
-        transacoesPorData.values.elementAt(index),
-      ),
-    );
-
-    return Container(
-      height: 300,
-      padding: EdgeInsets.symmetric(vertical: 16),
-      child: LineChart(
-        LineChartData(
-          spots: spots,
-          isCurved: true,
-          colors: [Colors.blue[400]!],
-          barData: BarAreaData(
-            show: true,
-            colors: [Colors.blue[100]!],
-          ),
-          dotData: FlDotData(show: true),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (value, meta) {
-                  return Text('R\$ ${value.toInt()}');
-                },
-              ),
-            ),
-          ),
-          gridData: FlGridData(show: true),
-          borderData: FlBorderData(show: true),
-        ),
-      ),
     );
   }
 }

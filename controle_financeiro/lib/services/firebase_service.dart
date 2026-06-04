@@ -1,52 +1,49 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/usuario.dart';
+import '../models/transacao.dart';
 
 class FirebaseService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Registrar novo usuário
-  static Future<bool> cadastrarUsuario({
-    required String email,
-    required String senha,
-    required String nome,
-  }) async {
+  // Inicializar Firebase
+  static Future<void> initializeFirebase() async {
     try {
-      // Criar usuário no Firebase Auth
+      await Firebase.initializeApp();
+    } catch (e) {
+      print('Erro ao inicializar Firebase: $e');
+    }
+  }
+
+  // Autenticação - Registrar
+  static Future<bool> registerUser(String email, String password, String name) async {
+    try {
       UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
-        password: senha,
+        password: password,
       );
 
-      // Salvar dados no Firestore
+      // Salvar dados do usuário no Firestore
       await _firestore.collection('usuarios').doc(userCredential.user!.uid).set({
-        'id': userCredential.user!.uid,
-        'nome': nome,
+        'nome': name,
         'email': email,
-        'dataCriacao': DateTime.now().toIso8601String(),
+        'uid': userCredential.user!.uid,
+        'dataCadastro': DateTime.now().toIso8601String(),
       });
 
       return true;
     } on FirebaseAuthException catch (e) {
-      print('Erro ao cadastrar: ${e.message}');
-      return false;
-    } catch (e) {
-      print('Erro inesperado: $e');
+      print('Erro ao registrar: ${e.message}');
       return false;
     }
   }
 
-  /// Login do usuário
-  static Future<bool> login({
-    required String email,
-    required String senha,
-  }) async {
+  // Autenticação - Login
+  static Future<bool> loginUser(String email, String password) async {
     try {
-      await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: senha,
-      );
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
       return true;
     } on FirebaseAuthException catch (e) {
       print('Erro ao fazer login: ${e.message}');
@@ -54,35 +51,31 @@ class FirebaseService {
     }
   }
 
-  /// Logout
+  // Logout
   static Future<void> logout() async {
     await _auth.signOut();
   }
 
-  /// Obter usuário atual
-  static User? get usuarioAtual => _auth.currentUser;
+  // Obter usuário atual
+  static User? getCurrentUser() {
+    return _auth.currentUser;
+  }
 
-  /// Obter stream de autenticação
-  static Stream<User?> get authStateChanges => _auth.authStateChanges();
-
-  /// Adicionar transação no Firestore
-  static Future<bool> adicionarTransacao({
-    required String usuarioId,
-    required String titulo,
-    required double valor,
-    required String data,
-    required String tipo,
-    required String categoria,
-  }) async {
+  // Adicionar transação ao Firestore
+  static Future<bool> addTransacao(Transacao transacao, String uid) async {
     try {
-      await _firestore.collection('transacoes').add({
-        'usuarioId': usuarioId,
-        'titulo': titulo,
-        'valor': valor,
-        'data': data,
-        'tipo': tipo,
-        'categoria': categoria,
-        'dataCriacao': DateTime.now().toIso8601String(),
+      await _firestore
+          .collection('usuarios')
+          .doc(uid)
+          .collection('transacoes')
+          .add({
+        'titulo': transacao.titulo,
+        'valor': transacao.valor,
+        'tipo': transacao.tipo,
+        'categoria': transacao.categoria,
+        'data': transacao.data.toIso8601String(),
+        'descricao': transacao.descricao,
+        'criadoEm': DateTime.now().toIso8601String(),
       });
       return true;
     } catch (e) {
@@ -91,29 +84,54 @@ class FirebaseService {
     }
   }
 
-  /// Obter stream de transações do usuário
-  static Stream<QuerySnapshot> getTransacoesStream(String usuarioId) {
-    return _firestore
-        .collection('transacoes')
-        .where('usuarioId', isEqualTo: usuarioId)
-        .orderBy('data', descending: true)
-        .snapshots();
+  // Obter transações do Firestore
+  static Future<List<Transacao>> getTransacoes(String uid) async {
+    try {
+      final snapshot = await _firestore
+          .collection('usuarios')
+          .doc(uid)
+          .collection('transacoes')
+          .orderBy('data', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        return Transacao(
+          id: doc.hashCode,
+          usuarioId: uid.hashCode,
+          titulo: doc['titulo'] ?? '',
+          valor: (doc['valor'] ?? 0.0).toDouble(),
+          tipo: doc['tipo'] ?? 'despesa',
+          categoria: doc['categoria'],
+          data: DateTime.parse(doc['data'] ?? DateTime.now().toIso8601String()),
+          descricao: doc['descricao'],
+        );
+      }).toList();
+    } catch (e) {
+      print('Erro ao obter transações: $e');
+      return [];
+    }
   }
 
-  /// Atualizar transação
-  static Future<bool> atualizarTransacao({
-    required String docId,
-    required String titulo,
-    required double valor,
-    required String tipo,
-    required String categoria,
-  }) async {
+  // Atualizar transação
+  static Future<bool> updateTransacao(
+    String uid,
+    String docId,
+    Transacao transacao,
+  ) async {
     try {
-      await _firestore.collection('transacoes').doc(docId).update({
-        'titulo': titulo,
-        'valor': valor,
-        'tipo': tipo,
-        'categoria': categoria,
+      await _firestore
+          .collection('usuarios')
+          .doc(uid)
+          .collection('transacoes')
+          .doc(docId)
+          .update({
+        'titulo': transacao.titulo,
+        'valor': transacao.valor,
+        'tipo': transacao.tipo,
+        'categoria': transacao.categoria,
+        'data': transacao.data.toIso8601String(),
+        'descricao': transacao.descricao,
+        'atualizadoEm': DateTime.now().toIso8601String(),
       });
       return true;
     } catch (e) {
@@ -122,10 +140,15 @@ class FirebaseService {
     }
   }
 
-  /// Deletar transação
-  static Future<bool> deletarTransacao(String docId) async {
+  // Deletar transação
+  static Future<bool> deleteTransacao(String uid, String docId) async {
     try {
-      await _firestore.collection('transacoes').doc(docId).delete();
+      await _firestore
+          .collection('usuarios')
+          .doc(uid)
+          .collection('transacoes')
+          .doc(docId)
+          .delete();
       return true;
     } catch (e) {
       print('Erro ao deletar transação: $e');
@@ -133,17 +156,27 @@ class FirebaseService {
     }
   }
 
-  /// Verificar se e-mail existe
-  static Future<bool> emailJaExiste(String email) async {
-    try {
-      final resultado = await _firestore
-          .collection('usuarios')
-          .where('email', isEqualTo: email)
-          .get();
-      return resultado.docs.isNotEmpty;
-    } catch (e) {
-      print('Erro ao verificar e-mail: $e');
-      return false;
-    }
+  // Stream de transações em tempo real
+  static Stream<List<Transacao>> getTransacoesStream(String uid) {
+    return _firestore
+        .collection('usuarios')
+        .doc(uid)
+        .collection('transacoes')
+        .orderBy('data', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        return Transacao(
+          id: doc.hashCode,
+          usuarioId: uid.hashCode,
+          titulo: doc['titulo'] ?? '',
+          valor: (doc['valor'] ?? 0.0).toDouble(),
+          tipo: doc['tipo'] ?? 'despesa',
+          categoria: doc['categoria'],
+          data: DateTime.parse(doc['data'] ?? DateTime.now().toIso8601String()),
+          descricao: doc['descricao'],
+        );
+      }).toList();
+    });
   }
 }

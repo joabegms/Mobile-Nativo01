@@ -1,245 +1,214 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../viewmodels/noticia_viewmodel.dart';
-import '../services/api_service.dart';
+import '../utils/formatters.dart';
 
 class NoticiasView extends StatefulWidget {
   @override
-  State<NoticiasView> createState() => _NoticiasViewState();
+  _NoticiasViewState createState() => _NoticiasViewState();
 }
 
-class _NoticiasViewState extends State<NoticiasView>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
+class _NoticiasViewState extends State<NoticiasView> {
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    
-    // Carregar notícias ao iniciar
-    Future.microtask(() {
-      final viewModel = context.read<NoticiaViewModel>();
-      viewModel.carregarTodasNoticias();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<NoticiaViewModel>(context, listen: false)
+          .carregarNoticiasFinanceiras();
     });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('📰 Notícias Financeiras'),
+        title: const Text('Notícias Financeiras'),
+        backgroundColor: Colors.blue[700],
         elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(text: 'Geral'),
-            Tab(text: 'Cripto'),
-            Tab(text: 'Ações'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildNoticiasList(context, 'geral'),
-          _buildNoticiasList(context, 'cripto'),
-          _buildNoticiasList(context, 'acoes'),
-        ],
+      body: Consumer<NoticiaViewModel>(
+        builder: (context, noticiaVM, _) {
+          if (noticiaVM.isLoading) {
+            return _buildSkeletonLoader();
+          }
+
+          if (noticiaVM.errorMessage != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: Colors.red[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    noticiaVM.errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      noticiaVM.carregarNoticiasFinanceiras();
+                    },
+                    child: const Text('Tentar Novamente'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (noticiaVM.noticias.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.newspaper, size: 48, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Nenhuma notícia encontrada',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return RefreshIndicator(
+            onRefresh: () => noticiaVM.carregarNoticiasFinanceiras(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  // Botões de filtro
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              noticiaVM.carregarNoticiasFinanceiras();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue[700],
+                            ),
+                            child: const Text('Finanças',
+                                style: TextStyle(color: Colors.white)),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () {
+                              noticiaVM.carregarDicasInvestimento();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue[700],
+                            ),
+                            child: const Text('Investimentos',
+                                style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Lista de notícias
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: noticiaVM.noticias.length,
+                    itemBuilder: (context, index) {
+                      final noticia = noticiaVM.noticias[index];
+                      return _buildNoticiaCard(context, noticia);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildNoticiasList(BuildContext context, String tipo) {
-    return Consumer<NoticiaViewModel>(
-      builder: (context, viewModel, child) {
-        List<Noticia> noticias;
-        
-        if (tipo == 'geral') {
-          noticias = viewModel.noticias;
-        } else if (tipo == 'cripto') {
-          noticias = viewModel.noticiasCripto;
-        } else {
-          noticias = viewModel.noticiasAcoes;
-        }
-
-        if (viewModel.isLoading) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Carregando notícias...'),
-              ],
-            ),
-          );
-        }
-
-        if (viewModel.erro.isNotEmpty && noticias.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(viewModel.erro),
-                SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    if (tipo == 'geral') {
-                      viewModel.carregarNoticias();
-                    } else if (tipo == 'cripto') {
-                      viewModel.carregarNoticiasCripto();
-                    } else {
-                      viewModel.carregarNoticiasAcoes();
-                    }
-                  },
-                  icon: Icon(Icons.refresh),
-                  label: Text('Tentar Novamente'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        if (noticias.isEmpty) {
-          return Center(
-            child: Text('Nenhuma notícia disponível'),
-          );
-        }
-
-        return RefreshIndicator(
-          onRefresh: () {
-            if (tipo == 'geral') {
-              return viewModel.carregarNoticias();
-            } else if (tipo == 'cripto') {
-              return viewModel.carregarNoticiasCripto();
-            } else {
-              return viewModel.carregarNoticiasAcoes();
-            }
-          },
-          child: ListView.builder(
-            padding: EdgeInsets.all(12),
-            itemCount: noticias.length,
-            itemBuilder: (context, index) {
-              final noticia = noticias[index];
-              return _buildNoticiaCard(context, noticia);
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildNoticiaCard(BuildContext context, Noticia noticia) {
+  Widget _buildNoticiaCard(BuildContext context, dynamic noticia) {
     return Card(
-      margin: EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 2,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          // Abrir notícia em navegador (implementar com url_launcher)
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Abrindo: ${noticia.url}')),
-          );
+        onTap: () async {
+          final url = Uri.parse(noticia.url);
+          if (await canLaunchUrl(url)) {
+            await launchUrl(url, mode: LaunchMode.externalApplication);
+          }
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Imagem
-            if (noticia.imagem != null)
-              Container(
-                height: 200,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+            if (noticia.imagem != null && noticia.imagem!.isNotEmpty)
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
                 ),
-                child: Image.network(
-                  noticia.imagem!,
+                child: CachedNetworkImage(
+                  imageUrl: noticia.imagem!,
+                  height: 200,
+                  width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[300],
-                      child: Icon(Icons.image_not_supported),
-                    );
-                  },
+                  placeholder: (context, url) => Container(
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.image_not_supported),
+                  ),
                 ),
               ),
             // Conteúdo
             Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Fonte e data
+                  Text(
+                    noticia.titulo,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    noticia.descricao ?? '',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Flexible(
-                        child: Text(
-                          noticia.fonte,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      Text(
+                        noticia.fonte,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                       ),
                       Text(
-                        _formatarData(noticia.dataPub),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[600],
-                        ),
+                        Formatters.formatDate(noticia.dataPublicacao),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                       ),
                     ],
-                  ),
-                  SizedBox(height: 8),
-                  // Título
-                  Text(
-                    noticia.titulo,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      height: 1.3,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: 8),
-                  // Descrição
-                  Text(
-                    noticia.descricao,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[700],
-                      height: 1.4,
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: 12),
-                  // Botão Ler Mais
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Abrindo notícia...')),
-                        );
-                      },
-                      icon: Icon(Icons.open_in_new, size: 16),
-                      label: Text('Ler Mais'),
-                    ),
                   ),
                 ],
               ),
@@ -250,18 +219,35 @@ class _NoticiasViewState extends State<NoticiasView>
     );
   }
 
-  String _formatarData(DateTime data) {
-    final agora = DateTime.now();
-    final diferenca = agora.difference(data);
-
-    if (diferenca.inHours < 1) {
-      return 'há ${diferenca.inMinutes}m';
-    } else if (diferenca.inHours < 24) {
-      return 'há ${diferenca.inHours}h';
-    } else if (diferenca.inDays < 7) {
-      return 'há ${diferenca.inDays}d';
-    } else {
-      return '${data.day}/${data.month}/${data.year}';
-    }
+  Widget _buildSkeletonLoader() {
+    return ListView.builder(
+      itemCount: 5,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 200,
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(4),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              height: 16,
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(4),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              height: 16,
+              width: 150,
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

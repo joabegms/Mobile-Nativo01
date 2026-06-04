@@ -1,5 +1,5 @@
 name: controle_financeiro
-description: "Aplicativo de controle financeiro pessoal com Flutter, SQLite, Provider e Material Design."
+description: "Aplicativo avançado de controle financeiro pessoal com Flutter, SQLite, Firebase, Gráficos, Notícias e Material Design 3."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -16,15 +16,16 @@ dependencies:
   sqflite: ^2.4.3
   path_provider: ^2.1.5
   
-  # Firebase (para entrega avançada)
+  # Firebase
   firebase_core: ^2.24.0
   firebase_auth: ^4.14.0
   cloud_firestore: ^4.13.0
   
   # API e HTTP
   http: ^1.1.0
+  url_launcher: ^6.2.0
   
-  # Gráficos (para entrega avançada)
+  # Gráficos
   fl_chart: ^0.64.0
   
   # Formatação e Utilities

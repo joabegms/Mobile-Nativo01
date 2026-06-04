@@ -1,92 +1,61 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+import '../services/noticia_service.dart';
 
 class NoticiaViewModel extends ChangeNotifier {
-  List<Noticia> _noticias = [];
-  List<Noticia> _noticiasCripto = [];
-  List<Noticia> _noticiasAcoes = [];
-  bool _isLoading = false;
-  String _erro = '';
+  List<Noticia> noticias = [];
+  bool isLoading = false;
+  String? errorMessage;
 
-  List<Noticia> get noticias => _noticias;
-  List<Noticia> get noticiasCripto => _noticiasCripto;
-  List<Noticia> get noticiasAcoes => _noticiasAcoes;
-  bool get isLoading => _isLoading;
-  String get erro => _erro;
-
-  /// Carregar notícias financeiras gerais
-  Future<void> carregarNoticias() async {
-    _isLoading = true;
-    _erro = '';
+  Future<void> carregarNoticiasFinanceiras() async {
+    isLoading = true;
+    errorMessage = null;
     notifyListeners();
 
     try {
-      _noticias = await APIService.obterNoticiasFinanceiras();
-      if (_noticias.isEmpty) {
-        _erro = 'Nenhuma notícia encontrada';
+      noticias = await NoticiaService.fetchNoticiasFinanceiras();
+      if (noticias.isEmpty) {
+        errorMessage = 'Nenhuma notícia encontrada';
       }
     } catch (e) {
-      _erro = 'Erro ao carregar notícias: $e';
+      errorMessage = 'Erro ao carregar notícias: $e';
     } finally {
-      _isLoading = false;
+      isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Carregar notícias de criptomoedas
-  Future<void> carregarNoticiasCripto() async {
-    _isLoading = true;
-    _erro = '';
+  Future<void> carregarDicasInvestimento() async {
+    isLoading = true;
+    errorMessage = null;
     notifyListeners();
 
     try {
-      _noticiasCripto = await APIService.obterNoticiasCripto();
-      if (_noticiasCripto.isEmpty) {
-        _erro = 'Nenhuma notícia de cripto encontrada';
+      noticias = await NoticiaService.fetchDicasInvestimento();
+      if (noticias.isEmpty) {
+        errorMessage = 'Nenhuma dica encontrada';
       }
     } catch (e) {
-      _erro = 'Erro ao carregar notícias de cripto: $e';
+      errorMessage = 'Erro ao carregar dicas: $e';
     } finally {
-      _isLoading = false;
+      isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Carregar notícias de ações
-  Future<void> carregarNoticiasAcoes() async {
-    _isLoading = true;
-    _erro = '';
+  Future<void> carregarNoticiasPorTema(String tema) async {
+    isLoading = true;
+    errorMessage = null;
     notifyListeners();
 
     try {
-      _noticiasAcoes = await APIService.obterNoticiasAcoes();
-      if (_noticiasAcoes.isEmpty) {
-        _erro = 'Nenhuma notícia de ações encontrada';
+      noticias = await NoticiaService.fetchNoticiasPorTema(tema);
+      if (noticias.isEmpty) {
+        errorMessage = 'Nenhuma notícia encontrada para: $tema';
       }
     } catch (e) {
-      _erro = 'Erro ao carregar notícias de ações: $e';
+      errorMessage = 'Erro ao carregar notícias: $e';
     } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Carregar todas as notícias simultaneamente
-  Future<void> carregarTodasNoticias() async {
-    _isLoading = true;
-    _erro = '';
-    notifyListeners();
-
-    try {
-      await Future.wait([
-        carregarNoticias(),
-        carregarNoticiasCripto(),
-        carregarNoticiasAcoes(),
-      ]);
-    } catch (e) {
-      _erro = 'Erro ao carregar notícias: $e';
-    } finally {
-      _isLoading = false;
+      isLoading = false;
       notifyListeners();
     }
   }
