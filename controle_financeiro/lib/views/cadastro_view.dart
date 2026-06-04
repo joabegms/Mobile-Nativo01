@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/usuario.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../models/usuario.dart';
+import '../utils/validators.dart';
 
 class CadastroView extends StatefulWidget {
   @override
@@ -13,43 +14,44 @@ class _CadastroViewState extends State<CadastroView> {
   final _nomeController = TextEditingController();
   final _emailController = TextEditingController();
   final _senhaController = TextEditingController();
-  final _confirmSenhaController = TextEditingController();
+  final _confirmaSenhaController = TextEditingController();
   bool _senhaVisivel = false;
-  bool _confirmSenhaVisivel = false;
+  bool _confirmaSenhaVisivel = false;
 
   @override
   void dispose() {
     _nomeController.dispose();
     _emailController.dispose();
     _senhaController.dispose();
-    _confirmSenhaController.dispose();
+    _confirmaSenhaController.dispose();
     super.dispose();
   }
 
-  void _fazerCadastro() async {
+  void _cadastrar() async {
     if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
-      
-      if (_senhaController.text != _confirmSenhaController.text) {
+      if (_senhaController.text != _confirmaSenhaController.text) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('As senhas não coincidem'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('As senhas não coincidem'),
+            backgroundColor: Colors.red,
+          ),
         );
         return;
       }
 
-      final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
-      Usuario novoUser = Usuario(
+      final usuario = Usuario(
         nome: _nomeController.text,
         email: _emailController.text,
         senha: _senhaController.text,
       );
-      
-      bool sucesso = await authViewModel.cadastrar(novoUser);
-      
+
+      final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+      bool sucesso = await authViewModel.cadastrar(usuario);
+
       if (sucesso) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Cadastrado com sucesso! Faça login.'),
+          const SnackBar(
+            content: Text('Cadastro realizado com sucesso!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -69,59 +71,57 @@ class _CadastroViewState extends State<CadastroView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Cadastro'),
+        title: const Text('Cadastrar'),
         elevation: 0,
         backgroundColor: Colors.blue[700],
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24.0),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(height: 20),
-                Text(
+                const SizedBox(height: 40),
+                Icon(Icons.person_add, size: 80, color: Colors.blue[700]),
+                const SizedBox(height: 40),
+                const Text(
                   'Criar Conta',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
-                SizedBox(height: 30),
+                const SizedBox(height: 30),
                 TextFormField(
                   controller: _nomeController,
                   decoration: InputDecoration(
                     labelText: 'Nome Completo',
-                    prefixIcon: Icon(Icons.person),
+                    prefixIcon: const Icon(Icons.person),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     filled: true,
                     fillColor: Colors.grey[100],
                   ),
-                  validator: (value) => value == null || value.isEmpty ? 'Nome obrigatório' : null,
+                  validator: (value) => Validators.validateName(value),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _emailController,
                   decoration: InputDecoration(
                     labelText: 'E-mail',
-                    prefixIcon: Icon(Icons.email),
+                    prefixIcon: const Icon(Icons.email),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     filled: true,
                     fillColor: Colors.grey[100],
                   ),
                   keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'E-mail obrigatório';
-                    if (!value.contains('@')) return 'E-mail inválido';
-                    return null;
-                  },
+                  validator: (value) => Validators.validateEmail(value),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _senhaController,
                   decoration: InputDecoration(
                     labelText: 'Senha',
-                    prefixIcon: Icon(Icons.lock),
+                    prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
                       icon: Icon(_senhaVisivel ? Icons.visibility : Icons.visibility_off),
                       onPressed: () => setState(() => _senhaVisivel = !_senhaVisivel),
@@ -131,41 +131,37 @@ class _CadastroViewState extends State<CadastroView> {
                     fillColor: Colors.grey[100],
                   ),
                   obscureText: !_senhaVisivel,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Senha obrigatória';
-                    if (value.length < 6) return 'Mínimo 6 caracteres';
-                    return null;
-                  },
+                  validator: (value) => Validators.validatePassword(value),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextFormField(
-                  controller: _confirmSenhaController,
+                  controller: _confirmaSenhaController,
                   decoration: InputDecoration(
                     labelText: 'Confirmar Senha',
-                    prefixIcon: Icon(Icons.lock),
+                    prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
-                      icon: Icon(_confirmSenhaVisivel ? Icons.visibility : Icons.visibility_off),
-                      onPressed: () => setState(() => _confirmSenhaVisivel = !_confirmSenhaVisivel),
+                      icon: Icon(_confirmaSenhaVisivel ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () => setState(() => _confirmaSenhaVisivel = !_confirmaSenhaVisivel),
                     ),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     filled: true,
                     fillColor: Colors.grey[100],
                   ),
-                  obscureText: !_confirmSenhaVisivel,
-                  validator: (value) => value == null || value.isEmpty ? 'Confirme a senha' : null,
+                  obscureText: !_confirmaSenhaVisivel,
+                  validator: (value) => Validators.validatePassword(value),
                 ),
-                SizedBox(height: 28),
+                const SizedBox(height: 28),
                 Consumer<AuthViewModel>(
                   builder: (context, authVM, _) {
                     return ElevatedButton(
-                      onPressed: authVM.isLoading ? null : _fazerCadastro,
+                      onPressed: authVM.isLoading ? null : _cadastrar,
                       style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         backgroundColor: Colors.blue[700],
                         disabledBackgroundColor: Colors.grey[300],
                       ),
                       child: authVM.isLoading
-                          ? SizedBox(
+                          ? const SizedBox(
                               height: 20,
                               width: 20,
                               child: CircularProgressIndicator(
@@ -173,7 +169,7 @@ class _CadastroViewState extends State<CadastroView> {
                                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             )
-                          : Text(
+                          : const Text(
                               'Cadastrar',
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                             ),

@@ -1,76 +1,75 @@
 class Transacao {
   int? id;
-  int? usuarioId;
+  int usuarioId;
   String titulo;
   double valor;
-  String data;
   String tipo; // 'receita' ou 'despesa'
   String? categoria;
+  DateTime data;
+  String? descricao;
 
   Transacao({
     this.id,
-    this.usuarioId,
+    required this.usuarioId,
     required this.titulo,
     required this.valor,
-    required this.data,
     required this.tipo,
     this.categoria,
-  });
+    DateTime? data,
+    this.descricao,
+  }) : data = data ?? DateTime.now();
 
+  // Converter Transacao para Map (para salvar no BD)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'usuario_id': usuarioId,
       'titulo': titulo,
       'valor': valor,
-      'data': data,
       'tipo': tipo,
       'categoria': categoria,
+      'data': data.toIso8601String(),
+      'descricao': descricao,
     };
   }
 
+  // Criar Transacao a partir de Map (quando vem do BD)
   factory Transacao.fromMap(Map<String, dynamic> map) {
     return Transacao(
       id: map['id'],
-      usuarioId: map['usuario_id'],
-      titulo: map['titulo'],
-      valor: map['valor'],
-      data: map['data'],
-      tipo: map['tipo'],
+      usuarioId: map['usuario_id'] ?? 0,
+      titulo: map['titulo'] ?? '',
+      valor: (map['valor'] ?? 0.0).toDouble(),
+      tipo: map['tipo'] ?? 'despesa',
       categoria: map['categoria'],
+      data: map['data'] != null ? DateTime.parse(map['data']) : DateTime.now(),
+      descricao: map['descricao'],
     );
   }
 
-  /// Formata a data para exibição (DD/MM/YYYY)
-  String get dataFormatada {
-    try {
-      final dateTime = DateTime.parse(data);
-      return '${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year}';
-    } catch (e) {
-      return data;
-    }
+  // Copiar com mudanças (útil para edição)
+  Transacao copyWith({
+    int? id,
+    int? usuarioId,
+    String? titulo,
+    double? valor,
+    String? tipo,
+    String? categoria,
+    DateTime? data,
+    String? descricao,
+  }) {
+    return Transacao(
+      id: id ?? this.id,
+      usuarioId: usuarioId ?? this.usuarioId,
+      titulo: titulo ?? this.titulo,
+      valor: valor ?? this.valor,
+      tipo: tipo ?? this.tipo,
+      categoria: categoria ?? this.categoria,
+      data: data ?? this.data,
+      descricao: descricao ?? this.descricao,
+    );
   }
 
-  /// Retorna ícone baseado na categoria
-  String get icone {
-    switch (categoria?.toLowerCase()) {
-      case 'alimentação':
-        return '🍔';
-      case 'transporte':
-        return '🚗';
-      case 'saúde':
-        return '🏥';
-      case 'educação':
-        return '📚';
-      case 'lazer':
-        return '🎬';
-      case 'salário':
-        return '💰';
-      case 'investimento':
-        return '📈';
-      case 'outros':
-      default:
-        return tipo == 'receita' ? '➕' : '➖';
-    }
-  }
+  @override
+  String toString() => 'Transacao(id: $id, titulo: $titulo, valor: $valor, tipo: $tipo)';
 }
